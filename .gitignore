@@ -1,0 +1,67 @@
+# ==============================================================================
+# AMBIENTE VIRTUAL E DEPENDÊNCIAS LOCAL (NUNCA ENVIAR AO GITHUB)
+# ==============================================================================
+.venv/
+venv/
+ENV/
+env/
+python/
+ENV_DIR/
+lib/
+lib64/
+share/wheels/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# ==============================================================================
+# ARQUIVOS PESADOS DE INTELIGÊNCIA ARTIFICIAL (DATASETS E PESOS)
+# ==============================================================================
+# Bloqueia qualquer arquivo de peso do PyTorch/YOLO (geralmente > 10MB até vários GBs)
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Bloqueia a pasta local que contém as imagens brutas e anotações dos datasets
+dataset/
+
+# Bloqueia pastas de resultados locais geradas por execuções de testes ou validações
+resultados_teste/
+runs/
+
+# ==============================================================================
+# JUPYTER NOTEBOOKS E ARQUIVOS TEMPORÁRIOS
+# ==============================================================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+.local/
+
+# ==============================================================================
+# ARQUIVOS DE CONFIGURAÇÃO LOCAL E SENSÍVEIS (SE HOUVER)
+# ==============================================================================
+.env
+.env.local
+
+# ==============================================================================
+# SISTEMA OPERACIONAL E IDEs
+# ==============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs (VS Code, PyCharm)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
