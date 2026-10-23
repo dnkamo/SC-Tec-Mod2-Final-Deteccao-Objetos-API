@@ -29,4 +29,6 @@ requests==2.32.3         # Comunicação HTTP assíncrona para o Streamlit consu
 # SUPORTE PARA AMBIENTE VIRTUAL E ACELERAÇÃO POR HARDWARE
 # ==============================================================================
 ipykernel==6.29.5        # Permite vincular o ambiente isolado (venv) ao Jupyter
-torch-directml==0.1.25   # Opcional: Aceleração de hardware para GPUs AMD no Windows
+torch-directml==0.2.5.dev240914   # Opcional: Aceleração de hardware para GPUs AMD no Windows
+onnx>=1.14.0             # Permite compatibilidade e correção dinâmica de IR de modelos
+onnxruntime>=1.17.0      # Garante suporte a modelos ONNX com IR versão 14 (Bypass AMD)
