@@ -3,6 +3,8 @@
 # ==============================================================================
 .venv/
 venv/
+venv_placas/
+venv_sctec_projFinal/
 ENV/
 env/
 python/
