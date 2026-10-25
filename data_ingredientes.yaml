@@ -1,0 +1,21 @@
+#train: ../train/images
+#val: ../valid/images
+#test: ../test/images
+
+# Tem um problema com nomes muito longos
+# portanto, o path é diferente para contornar a limitacao
+path: E:/projeto dataset/road signs.v2
+
+train: images/train  # ou o nome exato da subpasta de treino
+val:   images/valid    # ou o nome exato da subpasta de validação
+test:  images/test 
+
+nc: 26
+names: ['avocado', 'beans', 'beet', 'bell pepper', 'broccoli', 'brus capusta', 'cabbage', 'carrot', 'cayliflower', 'celery', 'corn', 'cucumber', 'eggplant', 'fasol', 'garlic', 'hot pepper', 'onion', 'peas', 'potato', 'pumpkin', 'rediska', 'redka', 'salad', 'squash-patisson', 'tomato', 'vegetable marrow']
+
+roboflow:
+  workspace: object-detection-yolo-feykl
+  project: ingredient-detection-kzuti
+  version: 7
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/object-detection-yolo-feykl/ingredient-detection-kzuti/dataset/7

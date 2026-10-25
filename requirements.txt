@@ -1,0 +1,35 @@
+# ==============================================================================
+# INTELIGÊNCIA ARTIFICIAL E PROCESSAMENTO VISUAL
+# ==============================================================================
+ultralytics==8.3.0       # Framework oficial para carregar, rodar e validar o YOLOv8
+opencv-python==4.10.0.84 # Manipulação matricial de imagens e desenho de caixas delimitadoras
+pillow==10.4.0           # Suporte a carregamento de imagens no FastAPI e Streamlit
+
+# ==============================================================================
+# MICROSERVIÇO BACKEND (API FASTAPI)
+# ==============================================================================
+fastapi==0.115.0         # Framework web moderno e rápido para construir a API
+uvicorn==0.31.0          # Servidor ASGI de alta performance para rodar o FastAPI
+python-multipart==0.0.12 # Obrigatório no FastAPI para aceitar uploads de arquivos (UploadFile)
+
+# ==============================================================================
+# VALIDAÇÃO DIDÁTICA E RELATÓRIOS (JUPYTER NOTEBOOK)
+# ==============================================================================
+pandas==2.2.3            # Criação do Classification Report estruturado em formato tabular
+matplotlib==3.9.2        # Plotagem de gráficos e renderização das imagens dentro do Notebook
+seaborn==0.13.2          # Renderização avançada e otimizada da Matriz de Confusão Reduzida
+notebook==7.2.2          # Servidor do Jupyter Notebook para rodar o arquivo .ipynb em células
+
+# ==============================================================================
+# INTERFACE WEB (FRONTEND STREAMLIT)
+# ==============================================================================
+streamlit==1.39.0        # Framework para construção da interface do usuário de forma rápida
+requests==2.32.3         # Comunicação HTTP assíncrona para o Streamlit consumir o FastAPI
+
+# ==============================================================================
+# SUPORTE PARA AMBIENTE VIRTUAL E ACELERAÇÃO POR HARDWARE
+# ==============================================================================
+ipykernel==6.29.5        # Permite vincular o ambiente isolado (venv) ao Jupyter
+torch-directml==0.2.5.dev240914   # Opcional: Aceleração de hardware para GPUs AMD no Windows
+onnx>=1.14.0             # Permite compatibilidade e correção dinâmica de IR de modelos
+onnxruntime>=1.17.0      # Garante suporte a modelos ONNX com IR versão 14 (Bypass AMD)
