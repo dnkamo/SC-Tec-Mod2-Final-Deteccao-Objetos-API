@@ -17,6 +17,7 @@ python-multipart==0.0.12 # Obrigatório no FastAPI para aceitar uploads de arqui
 # ==============================================================================
 pandas==2.2.3            # Criação do Classification Report estruturado em formato tabular
 matplotlib==3.9.2        # Plotagem de gráficos e renderização das imagens dentro do Notebook
+seaborn==0.13.2          # Renderização avançada e otimizada da Matriz de Confusão Reduzida
 notebook==7.2.2          # Servidor do Jupyter Notebook para rodar o arquivo .ipynb em células
 
 # ==============================================================================
