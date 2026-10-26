@@ -1,4 +1,16 @@
 # ==============================================================================
+# REPOSITÓRIO OFICIAL DOS BINÁRIOS DO PYTORCH (SUPORTE CORE PARA CUDA NVIDIA)
+# ==============================================================================
+--extra-index-url https://pytorch.org
+
+# ==============================================================================
+# INSTALAÇÃO DO PYTORCH ADAPTADO PARA ACELERAÇÃO POR HARDWARE
+# ==============================================================================
+torch==2.4.1+cu124       # Garante compatibilidade nativa com CUDA de placas NVIDIA
+torchvision==0.19.1+cu124 # Necessário para o ecossistema de Visão Computacional do YOLO
+torchaudio==2.4.1+cu124  # Dependência do ecossistema PyTorch Core
+
+# ==============================================================================
 # INTELIGÊNCIA ARTIFICIAL E PROCESSAMENTO VISUAL
 # ==============================================================================
 ultralytics==8.3.0       # Framework oficial para carregar, rodar e validar o YOLOv8
@@ -27,9 +39,9 @@ streamlit==1.39.0        # Framework para construção da interface do usuário 
 requests==2.32.3         # Comunicação HTTP assíncrona para o Streamlit consumir o FastAPI
 
 # ==============================================================================
-# SUPORTE PARA AMBIENTE VIRTUAL E ACELERAÇÃO POR HARDWARE
+# SUPORTE PARA AMBIENTE VIRTUAL E ACELERAÇÃO POR HARDWARE (COMPATIBILIDADE AMD)
 # ==============================================================================
 ipykernel==6.29.5        # Permite vincular o ambiente isolado (venv) ao Jupyter
-torch-directml==0.2.5.dev240914   # Opcional: Aceleração de hardware para GPUs AMD no Windows
+torch-directml==0.2.5.dev240914 # Aceleração de hardware para GPUs AMD no Windows
 onnx>=1.14.0             # Permite compatibilidade e correção dinâmica de IR de modelos
 onnxruntime>=1.17.0      # Garante suporte a modelos ONNX com IR versão 14 (Bypass AMD)
