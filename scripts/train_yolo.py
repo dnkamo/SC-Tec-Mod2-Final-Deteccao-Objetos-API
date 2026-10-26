@@ -6,6 +6,7 @@ from ultralytics import YOLO
 def detectar_dispositivo_treino():
     """
     Detecta e configura o hardware para o treinamento do YOLOv8s.
+    Força CPU para AMD devido à incompatibilidade do DirectML com loops de treino da Ultralytics.
     """
     if torch.cuda.is_available():
         print("🚀 GPU NVIDIA Detectada! O treinamento rodará via CUDA.")
@@ -13,12 +14,11 @@ def detectar_dispositivo_treino():
         
     try:
         import torch_directml
-        dml_device = torch_directml.device()
-        print(f"🚀 GPU AMD/Intel Detectada! O treinamento rodará via DirectML ({dml_device}).")
-        # Para treinamento via Ultralytics com DirectML, passamos o dispositivo mapeado
-        return dml_device
-    except Exception as e:
-        print(f"⚠️ DirectML não inicializado. O treino rodará no CPU (Lento). Motivo: {e}")
+        # Detectamos se é AMD apenas para avisar o usuário sobre o desvio seguro
+        print("⚠️ GPU AMD Detectada! Devido a limitações do DirectML com a Ultralytics, o treino será desviado para a CPU para evitar travamentos.")
+        return "cpu"
+    except Exception:
+        print("💻 Rodando o treino no CPU.")
         return "cpu"
 
 def treinar_modelo():

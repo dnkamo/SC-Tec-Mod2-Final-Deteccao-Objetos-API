@@ -23,28 +23,37 @@ def detectar_dispositivo():
 def processar_teste_local():
     dispositivo, eh_amd = detectar_dispositivo()
 
-    # 1. Definição do cenário e do modelo ativo para o teste rápido
-    dataset_ativo = "placas"
+    # ==============================================================================
+    # CONTROLE CENTRAL: ALTERNE APENAS ESTA VARIÁVEL ("placas" ou "ingredientes")
+    # ==============================================================================
+    DATASET_ATIVO = "placas" 
     
-    # Você pode alternar entre o baseline padrão (.onnx) ou o seu modelo treinado
-    # caminho_modelo = "../models/yolov8s.onnx"
-    caminho_modelo = f"../models/treinamentos/yolo_{dataset_ativo}/weights/best.onnx"
-
-    if not os.path.exists(caminho_modelo):
-        print(f"❌ Erro: O arquivo de pesos '{caminho_modelo}' não foi localizado.")
+    # 1. Mapeamento Automático de Modelos e Imagens com base na sua escolha
+    if DATASET_ATIVO == "placas":
+        caminho_modelo = f"../models/treinamentos/yolo_{DATASET_ATIVO}/weights/best.onnx"
+        pasta_imagens_teste = "../tests/placas"
+    elif DATASET_ATIVO == "ingredientes":
+        caminho_modelo = f"../models/treinamentos/yolo_{DATASET_ATIVO}/weights/best.onnx"
+        pasta_imagens_teste = "../tests/ingredientes"
+    else:
+        print(f"Erro: Cenário '{DATASET_ATIVO}' desconhecido.")
         return
 
-    # 2. Correção de metadados ONNX (Bypass de compatibilidade universal)
+    if not os.path.exists(caminho_modelo):
+        print(f"Erro: O arquivo de pesos '{caminho_modelo}' não foi localizado.")
+        return
+
+    # 2. Correção de metadados ONNX (Bypass de compatibilidade universal IR 13)
     try:
         model_proto = onnx.load(caminho_modelo)
         if model_proto.ir_version > 13:
-            print(f"🔄 Convertendo metadados do ONNX de IR {model_proto.ir_version} para IR 13...")
+            print(f"Convertendo metadados do ONNX de IR {model_proto.ir_version} para IR 13...")
             model_proto.ir_version = 13
             onnx.save(model_proto, caminho_modelo)
     except Exception as e:
         print(f"Nota: Metadados ONNX inalterados. Razão: {e}")
 
-    # 3. Carregamento do modelo e extração das classes
+    # 3. Carregamento do modelo e extração das classes de forma dinâmica
     nomes_classes = {}
     if eh_amd:
         ort_session = ort.InferenceSession(caminho_modelo, providers=['CPUExecutionProvider'])
@@ -56,24 +65,44 @@ def processar_teste_local():
         model.to(dispositivo)
         nomes_classes = model.names
 
-    # 4. Configuração das imagens de entrada e diretório de saída
-    os.makedirs("../resultados_teste", exist_ok=True)
-    
-    # Coloque aqui os caminhos das imagens que você quer validar rapidamente por terminal
+    # 4. Varredura Automática de Imagens na pasta do Dataset Ativo
+    if not os.path.exists(pasta_imagens_teste):
+        print(f"Pasta de testes não localizada em: {pasta_imagens_teste}. Criando pasta vazia...")
+        os.makedirs(pasta_imagens_teste, exist_ok=True)
+        return
+
+    # O filtro abaixo lista os arquivos REAIS da pasta, independente do nome complexo do Roboflow
+    extensoes_validas = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
     imagens_teste = [
-        "../tests/foto_rua_carros.jpg",
-        "../tests/foto_gato_teste.jpg"
+        os.path.join(pasta_imagens_teste, arquivo) 
+        for arquivo in os.listdir(pasta_imagens_teste) 
+        if arquivo.lower().endswith(extensoes_validas)
     ]
 
-    print(f"\n🎯 Iniciando Varredura de Testes para o cenário: {dataset_ativo.upper()}")
+    if not imagens_teste:
+        print(f"Nenhuma imagem encontrada dentro da pasta correspondente: '{pasta_imagens_teste}'")
+        return
+
+    # Cria diretório de saída unificado na raiz
+    pasta_resultados = os.path.join("..", "resultados_teste", DATASET_ATIVO)
+    os.makedirs(pasta_resultados, exist_ok=True)
+
+    print(f"\n======================================================================")
+    print(f"SCENARIO ATIVO: {DATASET_ATIVO.upper()}")
+    print(f"Total de imagens Roboflow detectadas para teste: {len(imagens_teste)}")
+    print(f"Salvando resultados em: {pasta_resultados}")
+    print(f"======================================================================\n")
 
     for img_path in imagens_teste:
-        if not os.path.exists(img_path):
-            print(f"⚠️ Arquivo {img_path} não encontrado. Pulando...")
-            continue
-
-        print(f"--- Processando: {os.path.basename(img_path)} ---")
+        # Pega o nome complexo original para salvar o resultado com o mesmo nome
+        nome_arquivo_original = os.path.basename(img_path)
+        print(f"--- Processando arquivo: {nome_arquivo_original} ---")
+        
         img_bgr = cv2.imread(img_path)
+        if img_bgr is None:
+            print(f"Erro ao abrir a imagem: {img_path}")
+            continue
+            
         h_orig, w_orig = img_bgr.shape[:2]
         caixas_detectadas = []
 
@@ -120,9 +149,9 @@ def processar_teste_local():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         nome_saida = f"resultado_{os.path.basename(img_path)}"
-        caminho_salvar = os.path.join("../resultados_teste", nome_saida)
+        caminho_salvar = os.path.join(pasta_resultados, nome_saida)
         cv2.imwrite(caminho_salvar, img_bgr)
-        print(f"💾 Foto processada salva em: {caminho_salvar}\n")
+        print(f"Foto salva em: {caminho_salvar}\n")
 
 if __name__ == "__main__":
     processar_teste_local()
