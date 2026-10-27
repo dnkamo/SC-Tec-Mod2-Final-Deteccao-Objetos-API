@@ -1,7 +1,8 @@
 import argparse
 import os
-import torch
+from pathlib import Path
 from ultralytics import YOLO
+import torch
 
 def detectar_dispositivo_treino():
     """
@@ -14,7 +15,6 @@ def detectar_dispositivo_treino():
         
     try:
         import torch_directml
-        # Detectamos se é AMD apenas para avisar o usuário sobre o desvio seguro
         print("⚠️ GPU AMD Detectada! Devido a limitações do DirectML com a Ultralytics, o treino será desviado para a CPU para evitar travamentos.")
         return "cpu"
     except Exception:
@@ -32,13 +32,20 @@ def treinar_modelo():
     )
     args = parser.parse_args()
 
-    yaml_config = f"../data_{args.dataset}.yaml"
-    if not os.path.exists(yaml_config):
-        yaml_config = f"data_{args.dataset}.yaml"
-        if not os.path.exists(yaml_config):
+    # 1. MAPEAMENTO DE DIRETÓRIOS ABSOLUTOS DINÂMICOS
+    DIRETORIO_SCRIPT = Path(__file__).resolve().parent
+    RAIZ_PROJETO = DIRETORIO_SCRIPT.parent
+
+    # Localiza o arquivo YAML procurando na raiz do projeto
+    yaml_config = RAIZ_PROJETO / f"data_{args.dataset}.yaml"
+    if not yaml_config.exists():
+        # Segunda tentativa: procura na pasta atual do terminal
+        yaml_config = Path(f"data_{args.dataset}.yaml").resolve()
+        if not yaml_config.exists():
             print(f"❌ Erro: O arquivo de configuração {yaml_config} não foi localizado.")
             return
 
+    # Executa a função de detecção que estava faltando
     dispositivo = detectar_dispositivo_treino()
 
     print(f"\n==============================================================")
@@ -46,35 +53,50 @@ def treinar_modelo():
     print(f"📄 Arquivo YAML: {yaml_config}")
     print(f"==============================================================\n")
 
-    # Carrega o modelo base Small nativo (.pt) para iniciar o Fine-Tuning
-    modelo_base = "../models/yolov8s.pt" if os.path.exists("../models/yolov8s.pt") else "yolov8s.pt"
-    model = YOLO(modelo_base)
+    # Garante o modelo base apontando para a pasta models na raiz
+    modelo_base = RAIZ_PROJETO / "models" / "yolov8s.pt"
+    if not modelo_base.exists():
+        modelo_base = "yolov8s.pt" # Baixa da nuvem caso não exista localmente
 
-    # Dispara o treino com tratamento de workers para evitar crashes no Windows
+    model = YOLO(str(modelo_base))
+
+    # Definindo pastas de destino absolutas
+    pasta_projeto = RAIZ_PROJETO / "models" / "treinamentos"
+    nome_treino = f"yolo_{args.dataset}"
+
+    # Dispara o treino com tratamento de workers, caminhos limpos e paciência
     model.train(
-        data=yaml_config,
+        data=str(yaml_config),
         epochs=50,
         imgsz=640,
         batch=16,
         device=dispositivo,
-        project="../models/treinamentos",
-        name=f"yolo_{args.dataset}",
-        workers=0 if os.name == 'nt' else 2  # 0 evita gargalo de memória compartilhada no Windows
+        project=str(pasta_projeto),
+        name=nome_treino,
+        patience=10,  # Parada antecipada após 10 épocas sem melhora
+        workers=0 if os.name == 'nt' else 2  # Evita gargalo de multiprocessamento no Windows
     )
 
     print(f"\n🔄 Exportando o modelo treinado para o formato ONNX universal...")
-    # Carrega o melhor peso gerado em formato nativo do PyTorch
-    caminho_melhor_peso = f"../models/treinamentos/yolo_{args.dataset}/weights/best.pt"
-    model_treinado = YOLO(caminho_melhor_peso)
+    
+    # 2. RESOLUÇÃO COMPLETA DO ERRO DE CAMINHO
+    caminho_melhor_peso = pasta_projeto / nome_treino / "weights" / "best.pt"
+    
+    if not caminho_melhor_peso.exists():
+        print(f"❌ Erro Crítico: O arquivo de pesos não foi encontrado em: {caminho_melhor_peso}")
+        return
+
+    model_treinado = YOLO(str(caminho_melhor_peso))
     
     # Exporta para ONNX (O framework gera o arquivo best.onnx na mesma pasta)
     model_treinado.export(format="onnx", imgsz=640)
 
     print(f"\n==============================================================")
     print(f"✅ CONCLUÍDO COM SUCESSO!")
-    print(f"💾 Modelo PyTorch: ../models/treinamentos/yolo_{args.dataset}/weights/best.pt")
-    print(f"💾 Modelo ONNX:    ../models/treinamentos/yolo_{args.dataset}/weights/best.onnx")
+    print(f"💾 Modelo PyTorch: {caminho_melhor_peso}")
+    print(f"💾 Modelo ONNX:    {caminho_melhor_peso.with_suffix('.onnx')}")
     print(f"==============================================================\n")
 
+# Proteção obrigatória para execução CLI estável no Windows
 if __name__ == "__main__":
     treinar_modelo()

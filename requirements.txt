@@ -1,7 +1,7 @@
 # ==============================================================================
 # REPOSITÓRIO OFICIAL DOS BINÁRIOS DO PYTORCH (SUPORTE CORE PARA CUDA NVIDIA)
 # ==============================================================================
---extra-index-url https://pytorch.org
+--extra-index-url https://download.pytorch.org/whl/cu124
 
 # ==============================================================================
 # INSTALAÇÃO DO PYTORCH ADAPTADO PARA ACELERAÇÃO POR HARDWARE
