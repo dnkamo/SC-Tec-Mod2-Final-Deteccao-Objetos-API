@@ -1,19 +1,22 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from typing import Literal
+from fastapi import APIRouter, File, UploadFile, HTTPException, Query
 from app.services.yolo_service import YoloService
 
-# Inicializa o roteador do FastAPI para agrupar as rotas da API
 router = APIRouter()
-
-# Instancia o motor do YOLO carregando os pesos e hardware definidos no config.py
 yolo_service = YoloService()
 
-@router.post("/detect", summary="Realiza a detecção de objetos em uma imagem")
-async def detect_objects(file: UploadFile = File(...)):
+@router.post("/detect", summary="Realiza a detecção de objetos mapeando o cenário selecionado")
+async def detect_objects(
+    file: UploadFile = File(...),
+    cenario: Literal["placas", "ingredientes", "padrao"] = Query(
+        "padrao", 
+        description="Escolha qual inteligência artificial deve processar e analisar esta imagem."
+    )
+):
     """
-    Endpoint HTTP POST que aceita o upload de um arquivo binário de imagem.
-    Retorna um objeto JSON estruturado contendo a classe, confiança e as caixas delimitadoras.
+    Endpoint HTTP POST que aceita o upload de uma imagem e o cenário de inteligência artificial desejado.
+    Se o cenário customizado não for encontrado no servidor, o sistema aplica o Fallback automático para o modelo padrão.
     """
-    # 1. Validação básica de extensão do arquivo para segurança do microsserviço
     extensoes_suportadas = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
     if not file.filename.lower().endswith(extensoes_suportadas):
         raise HTTPException(
@@ -22,17 +25,14 @@ async def detect_objects(file: UploadFile = File(...)):
         )
     
     try:
-        # 2. Lê os bytes brutos do arquivo carregado na requisição assíncrona
         imagem_bytes = await file.read()
         
-        # 3. Dispara o pipeline de inferência (Híbrido AMD / NVIDIA / CPU)
-        resultado = yolo_service.detectar_objetos(imagem_bytes)
+        # Dispara o pipeline passando o cenário dinâmico escolhido pelo usuário
+        resultado = yolo_service.detectar_objetos(imagem_bytes, cenario=cenario)
         
-        # 4. Se o processamento matricial falhar por imagem corrompida, levanta erro técnico
         if resultado.get("status") == "error":
             raise HTTPException(status_code=422, detail=resultado.get("message"))
             
-        # 5. Devolve o payload estruturado exatamente igual ao solicitado no edital
         return resultado
         
     except Exception as e:

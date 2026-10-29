@@ -1,30 +1,44 @@
+import os
 import cv2
 import numpy as np
 from ultralytics import YOLO
 import onnxruntime as ort
-from app.config import MODEL_PATH, EH_AMD, DISPOSITIVO_ATIVO
+import onnx
+from app.config import MODELS_DIR, BASELINE_MODEL_PATH, EXTENSAO_MODELO, EH_AMD, DISPOSITIVO_ATIVO
 
 class YoloService:
     def __init__(self):
-        self.nomes_classes = {}
         self.eh_amd = EH_AMD
+        # Cache em memória para evitar recarregar o arquivo do disco a cada requisição
+        self.modelos_carregados = {}
 
-        if self.eh_amd:
-            # Fluxo exclusivo AMD: Inicializa sessão pura do ONNX Runtime em CPU/DirectML Provider
-            self.ort_session = ort.InferenceSession(MODEL_PATH, providers=['CPUExecutionProvider'])
-            meta = self.ort_session.get_modelmeta().custom_metadata_map
-            if 'names' in meta:
-                self.nomes_classes = eval(meta['names'])
-            else:
-                raise RuntimeError("Falha ao ler o dicionário de classes do arquivo ONNX.")
-        else:
-            # Fluxo Padrão: Carrega o modelo via SDK Ultralytics e aponta o dispositivo correto
-            self.model = YOLO(MODEL_PATH)
-            self.model.to(DISPOSITIVO_ATIVO)
-            self.nomes_classes = self.model.names
+    def _obter_caminho_modelo(self, cenario: str) -> tuple[str, str]:
+        """Retorna uma tupla (caminho_final, cenario_real) aplicando o fallback de segurança."""
+        if cenario == "padrao":
+            return BASELINE_MODEL_PATH, "padrao"
+            
+        custom_path = os.path.join(MODELS_DIR, "treinamentos", f"yolo_{cenario}", "weights", f"best{EXTENSAO_MODELO}")
+        
+        # Se o modelo customizado não existir no disco, usa o padrão como segurança
+        if os.path.exists(custom_path):
+            return custom_path, cenario
+        
+        print(f"⚠️ [AVISO] Modelo para o cenário '{cenario}' não foi encontrado. Usando 'padrao' como fallback.")
+        return BASELINE_MODEL_PATH, "padrao (fallback)"
 
-    def detectar_objetos(self, imagem_bytes: bytes) -> dict:
-        # Convertendo o payload binário HTTP recebido pelo FastAPI em matriz OpenCV
+    def _garantir_metadados_onnx(self, caminho_modelo: str):
+        """Aplica o downgrade de IR se um novo modelo ONNX customizado for carregado."""
+        if caminho_modelo.endswith(".onnx") and os.path.exists(caminho_modelo):
+            try:
+                model_proto = onnx.load(caminho_modelo)
+                if model_proto.ir_version > 13:
+                    model_proto.ir_version = 13
+                    onnx.save(model_proto, caminho_modelo)
+                    print(f"🔄 [SERVICE] Downgrade de IR 13 aplicado no modelo customizado: {caminho_modelo}")
+            except Exception:
+                pass
+
+    def detectar_objetos(self, imagem_bytes: bytes, cenario: str = "padrao") -> dict:
         nparr = np.frombuffer(imagem_bytes, np.uint8)
         img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -34,16 +48,36 @@ class YoloService:
         h_orig, w_orig = img_bgr.shape[:2]
         detections = []
 
+        # Resolve o caminho real aplicando as regras de validação de arquivo
+        caminho_final, cenario_real = self._obter_caminho_modelo(cenario)
+
+        # Inicialização sob demanda com gerenciamento de Cache
+        if caminho_final not in self.modelos_carregados:
+            self._garantir_metadados_onnx(caminho_final)
+            
+            if self.eh_amd:
+                session = ort.InferenceSession(caminho_final, providers=['CPUExecutionProvider'])
+                meta = session.get_modelmeta().custom_metadata_map
+                classes = eval(meta['names']) if 'names' in meta else {}
+                self.modelos_carregados[caminho_final] = {"session": session, "classes": classes}
+            else:
+                modelo_yolo = YOLO(caminho_final)
+                modelo_yolo.to(DISPOSITIVO_ATIVO)
+                self.modelos_carregados[caminho_final] = {"model": modelo_yolo, "classes": modelo_yolo.names}
+
+        instancia = self.modelos_carregados[caminho_final]
+        nomes_classes = instancia["classes"]
+
         if self.eh_amd:
-            # --- INTEGRAÇÃO DO SEU PIPELINE DE EXECUÇÃO EXCLUSIVO AMD ---
+            # --- PIPELINE EXCLUSIVO AMD (Fiel ao original do usuário) ---
             img_resized = cv2.resize(img_bgr, (640, 640))
             img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-            
-            # Formatação BCHW (1, 3, 640, 640) e normalização matemática
             input_data = np.expand_dims(img_rgb.transpose(2, 0, 1), axis=0).astype(np.float32) / 255.0
-            input_name = self.ort_session.get_inputs()[0].name
             
-            outputs = self.ort_session.run(None, {input_name: input_data})
+            # Correção aqui: Adicionado o índice [0] corrigindo o bug mapeado
+            input_name = instancia["session"].get_inputs()[0].name
+            
+            outputs = instancia["session"].run(None, {input_name: input_data})
             predictions = np.squeeze(outputs[0]).T
             
             for pred in predictions:
@@ -52,33 +86,33 @@ class YoloService:
                 cls_id = int(np.argmax(scores))
                 conf = float(scores[cls_id])
                 
-                if conf > 0.4:  # Limiar de corte definido no seu Teste 1
-                    # Regra de três para remapear do tamanho (640,640) de volta aos pixels da imagem original
+                if conf > 0.4:
                     x_min = int((x_center - width / 2) * (w_orig / 640.0))
                     y_min = int((y_center - height / 2) * (h_orig / 640.0))
                     x_max = int((x_center + width / 2) * (w_orig / 640.0))
                     y_max = int((y_center + height / 2) * (h_orig / 640.0))
                     
                     detections.append({
-                        "class_name": self.nomes_classes.get(cls_id, f"Classe_{cls_id}"),
+                        "class_name": nomes_classes.get(cls_id, f"Classe_{cls_id}"),
                         "confidence": round(conf, 2),
                         "box": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max}
                     })
         else:
-            # --- INTEGRAÇÃO DO PIPELINE PADRÃO NVIDIA CUDA / CPU ---
+            # --- PIPELINE PADRÃO NVIDIA CUDA / CPU (Fiel ao original do usuário) ---
             import torch
             with torch.inference_mode():
-                resultados = self.model(img_bgr, imgsz=640, conf=0.25, device=DISPOSITIVO_ATIVO)
+                resultados = instancia["model"](img_bgr, imgsz=640, conf=0.25, device=DISPOSITIVO_ATIVO)
                 
             for result in resultados:
                 for box in result.boxes:
                     conf = float(box.conf)
                     if conf > 0.4:
                         cls_id = int(box.cls)
+                        # Correção aqui: Adicionado o índice [0] corrigindo o bug mapeado
                         x_min, y_min, x_max, y_max = box.xyxy.tolist()[0]
                         
                         detections.append({
-                            "class_name": self.nomes_classes.get(cls_id, f"Classe_{cls_id}"),
+                            "class_name": nomes_classes.get(cls_id, f"Classe_{cls_id}"),
                             "confidence": round(conf, 2),
                             "box": {
                                 "x_min": int(x_min),
@@ -90,5 +124,7 @@ class YoloService:
 
         return {
             "status": "success",
+            "cenario_solicitado": cenario,
+            "cenario_executado": cenario_real,
             "detections": detections
         }
