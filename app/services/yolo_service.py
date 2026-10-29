@@ -69,16 +69,18 @@ class YoloService:
         nomes_classes = instancia["classes"]
 
         if self.eh_amd:
-            # --- PIPELINE EXCLUSIVO AMD (Fiel ao original do usuário) ---
+            # --- PIPELINE EXCLUSIVO AMD COM NMS MANUAL ---
             img_resized = cv2.resize(img_bgr, (640, 640))
             img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
             input_data = np.expand_dims(img_rgb.transpose(2, 0, 1), axis=0).astype(np.float32) / 255.0
             
-            # Correção aqui: Adicionado o índice [0] corrigindo o bug mapeado
             input_name = instancia["session"].get_inputs()[0].name
-            
             outputs = instancia["session"].run(None, {input_name: input_data})
             predictions = np.squeeze(outputs[0]).T
+            
+            boxes_temp = []
+            confidencias_temp = []
+            classes_temp = []
             
             for pred in predictions:
                 x_center, y_center, width, height = pred[:4]
@@ -87,28 +89,57 @@ class YoloService:
                 conf = float(scores[cls_id])
                 
                 if conf > 0.4:
+                    # Converte para formato esperado pelo NMS do OpenCV (x_min, y_min, largura, altura)
                     x_min = int((x_center - width / 2) * (w_orig / 640.0))
                     y_min = int((y_center - height / 2) * (h_orig / 640.0))
-                    x_max = int((x_center + width / 2) * (w_orig / 640.0))
-                    y_max = int((y_center + height / 2) * (h_orig / 640.0))
+                    w_pixel = int(width * (w_orig / 640.0))
+                    h_pixel = int(height * (h_orig / 640.0))
+                    
+                    boxes_temp.append([x_min, y_min, w_pixel, h_pixel])
+                    confidencias_temp.append(conf)
+                    classes_temp.append(cls_id)
+            
+            # Aplica o algoritmo de NMS do OpenCV para apagar caixas duplicadas/esmagadas
+            indices_validos = cv2.dnn.NMSBoxes(boxes_temp, confidencias_temp, score_threshold=0.4, nms_threshold=0.45)
+            
+            if len(indices_validos) > 0:
+                for idx in indices_validos.flatten():
+                    x_min, y_min, w_pixel, h_pixel = boxes_temp[idx]
+                    conf = confidencias_temp[idx]
+                    cls_id = classes_temp[idx]
                     
                     detections.append({
                         "class_name": nomes_classes.get(cls_id, f"Classe_{cls_id}"),
                         "confidence": round(conf, 2),
-                        "box": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max}
+                        "box": {
+                            "x_min": x_min,
+                            "y_min": y_min,
+                            "x_max": x_min + w_pixel,
+                            "y_max": y_min + h_pixel
+                        }
                     })
         else:
             # --- PIPELINE PADRÃO NVIDIA CUDA / CPU (Fiel ao original do usuário) ---
             import torch
             with torch.inference_mode():
-                resultados = instancia["model"](img_bgr, imgsz=640, conf=0.25, device=DISPOSITIVO_ATIVO)
+                # iou=0.45: Remove caixas que se sobreponham mais de 45% com a caixa principal
+                # agnostic_nms=True: Elimina duplicadas mesmo se o modelo achar que são classes diferentes
+                resultados = instancia["model"](
+                    img_bgr, 
+                    imgsz=640, 
+                    conf=0.35,              # Subimos ligeiramente o corte para filtrar ruídos
+                    iou=0.45,               # Limiar estrito de NMS para eliminar duplicadas
+                    agnostic_nms=True,      # Evita caixas duplicadas de classes concorrentes
+                    device=DISPOSITIVO_ATIVO
+                )
+
                 
             for result in resultados:
                 for box in result.boxes:
                     conf = float(box.conf)
                     if conf > 0.4:
                         cls_id = int(box.cls)
-                        # Correção aqui: Adicionado o índice [0] corrigindo o bug mapeado
+
                         x_min, y_min, x_max, y_max = box.xyxy.tolist()[0]
                         
                         detections.append({
