@@ -140,6 +140,10 @@ if uploaded_file is not None:
                             st.session_state.resultado_json = {"status": "success", "message": "Nenhum objeto detectado.", "detections": []}
                             st.session_state.img_renderizavel = np.array(image)
                             st.session_state.image_bytes_processada = bytes_data
+
+                        # Força o Streamlit a recarregar a página e exibir os dados imediatamente
+                        st.rerun()
+                        
                     else:
                         st.error(f"Erro no Backend: Código {response.status_code}")
                         st.code(response.text)
