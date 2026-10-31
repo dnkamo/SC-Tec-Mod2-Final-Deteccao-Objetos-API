@@ -28,13 +28,13 @@ def processar_teste_local():
     # ==============================================================================
     DATASET_ATIVO = "placas" 
     
-    # 1. Mapeamento Automático de Modelos e Imagens com base na sua escolha
-    if DATASET_ATIVO == "placas":
-        caminho_modelo = f"../models/treinamentos/yolo_{DATASET_ATIVO}/weights/best.onnx"
-        pasta_imagens_teste = "../tests/placas"
-    elif DATASET_ATIVO == "ingredientes":
-        caminho_modelo = f"../models/treinamentos/yolo_{DATASET_ATIVO}/weights/best.onnx"
-        pasta_imagens_teste = "../tests/ingredientes"
+    # Descobre o diretório onde este arquivo de script .py está salvo
+    DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
+    
+    # 1. Mapeamento Dinâmico e Absoluto de Modelos e Imagens
+    if DATASET_ATIVO in ["placas", "ingredientes"]:
+        caminho_modelo = os.path.abspath(os.path.join(DIRETORIO_ATUAL, "..", "models", "treinamentos", f"yolo_{DATASET_ATIVO}", "weights", "best.onnx"))
+        pasta_imagens_teste = os.path.abspath(os.path.join(DIRETORIO_ATUAL, "..", "tests", DATASET_ATIVO))
     else:
         print(f"Erro: Cenário '{DATASET_ATIVO}' desconhecido.")
         return
@@ -107,6 +107,10 @@ def processar_teste_local():
         caixas_detectadas = []
 
         # 5. Inferência condicionada ao ecossistema de hardware
+        caixas_candidatas = []
+        confidencias_candidatas = []
+        classes_candidatas = []
+
         if eh_amd:
             img_resized = cv2.resize(img_bgr, (640, 640))
             img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
@@ -122,31 +126,58 @@ def processar_teste_local():
                 cls_id = int(np.argmax(scores))
                 conf = float(scores[cls_id])
                 
-                if conf > 0.4:
+                if conf > 0.25:  # Limiar inicial de confiança
+                    # Converte para formato do OpenCV: [x_min, y_min, largura, altura]
+                    w_box = int(width * (w_orig / 640.0))
+                    h_box = int(height * (h_orig / 640.0))
                     x_min = int((x_center - width / 2) * (w_orig / 640.0))
                     y_min = int((y_center - height / 2) * (h_orig / 640.0))
-                    x_max = int((x_center + width / 2) * (w_orig / 640.0))
-                    y_max = int((y_center + height / 2) * (h_orig / 640.0))
-                    caixas_detectadas.append((x_min, y_min, x_max, y_max, conf, cls_id))
+                    
+                    caixas_candidatas.append([x_min, y_min, w_box, h_box])
+                    confidencias_candidatas.append(conf)
+                    classes_candidatas.append(cls_id)
         else:
             with torch.inference_mode():
-                resultados = model(img_path, imgsz=640, conf=0.25, device=dispositivo)
+                # O parâmetro iou=0.45 controla a supressão nativa da Ultralytics
+                resultados = model(img_path, imgsz=640, conf=0.25, iou=0.45, device=dispositivo)
             for result in resultados:
                 for box in result.boxes:
                     conf = float(box.conf)
-                    if conf > 0.4:
+                    if conf > 0.25:
                         cls_id = int(box.cls)
                         x_min, y_min, x_max, y_max = box.xyxy.tolist()[0]
-                        caixas_detectadas.append((int(x_min), int(y_min), int(x_max), int(y_max), conf, cls_id))
+                        w_box = int(x_max - x_min)
+                        h_box = int(y_max - y_min)
+                        
+                        caixas_candidatas.append([int(x_min), int(y_min), w_box, h_box])
+                        confidencias_candidatas.append(conf)
+                        classes_candidatas.append(cls_id)
 
-        # 6. Desenho das predições e gravação do arquivo físico local
-        for x_min, y_min, x_max, y_max, conf, cls_id in caixas_detectadas:
-            nome_classe = nomes_classes.get(cls_id, f"Classe_{cls_id}")
-            print(f"   ↳ [DETECTADO] {nome_classe} ({conf:.2f}) -> Box: [{x_min}, {y_min}, {x_max}, {y_max}]")
-            
-            cv2.rectangle(img_bgr, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-            cv2.putText(img_bgr, f"{nome_classe} {conf:.2f}", (x_min, max(y_min - 10, 0)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        # --- APLICAÇÃO DO NMS (SUPRESSÃO NÃO-MÁXIMA) ---
+        # score_threshold: ignora caixas abaixo dessa confiança
+        # nms_threshold: caixas que se sobrepõem mais que 45% (IoU) serão suprimidas
+        indices_finais = cv2.dnn.NMSBoxes(
+            bboxes=caixas_candidatas, 
+            scores=confidencias_candidatas, 
+            score_threshold=0.40, 
+            nms_threshold=0.45
+        )
+
+        # 6. Desenho das predições filtradas pelo NMS
+        if len(indices_finais) > 0:
+            # Garante compatibilidade de indexação entre diferentes versões do OpenCV
+            for i in indices_finais.flatten():
+                x_min, y_min, w_box, h_box = caixas_candidatas[i]
+                x_max, y_max = x_min + w_box, y_min + h_box
+                conf = confidencias_candidatas[i]
+                cls_id = classes_candidatas[i]
+                
+                nome_classe = nomes_classes.get(cls_id, f"Classe_{cls_id}")
+                print(f"   ↳ [DETECTADO] {nome_classe} ({conf:.2f}) -> Box: [{x_min}, {y_min}, {x_max}, {y_max}]")
+                
+                cv2.rectangle(img_bgr, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                cv2.putText(img_bgr, f"{nome_classe} {conf:.2f}", (x_min, max(y_min - 10, 0)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         nome_saida = f"resultado_{os.path.basename(img_path)}"
         caminho_salvar = os.path.join(pasta_resultados, nome_saida)
