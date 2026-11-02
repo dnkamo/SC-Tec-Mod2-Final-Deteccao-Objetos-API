@@ -8,8 +8,8 @@ O **VisionGuard AI** é um ecossistema completo de Visão Computacional projetad
 
 ## Links Globais de Acesso e Planejamento
 
-* **Planejamento Ágil (Quadro Kanban):** [https://trello.com/invite/b/6ad23294ec185b629da2d387/ATTI56aa9b86f9c65efed555d8c956ee6bc647EDF546/🤖-projeto-yolo-fastapi](Trello)
-* **Demonstração Prática (Vídeo de 7 minutos):** `[LINK DO VÍDEO DO YOUTUBE/DRIVE DISPONÍVEL APÓS GRAVAÇÃO]`
+* **Planejamento Ágil (Quadro Kanban):** [Trello](https://trello.com/invite/b/6ad23294ec185b629da2d387/ATTI56aa9b86f9c65efed555d8c956ee6bc647EDF546/🤖-projeto-yolo-fastapi)
+* **Demonstração Prática (Vídeo de 7 minutos):** [Video Demonstração](https://drive.google.com/file/d/1kcxHn9PVm5kaS8vr_QRqybHJ4_BgC5mr/view?usp=sharing)
 * **Código-Fonte Original:** [Repositório Oficial no GitHub](https://github.com)
 
 ---
